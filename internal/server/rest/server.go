@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -11,25 +12,36 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MisterGrinvalds/sidequest/internal/server/ui"
 	"github.com/MisterGrinvalds/sidequest/internal/store"
 )
 
 // Server is a REST API server with full CRUD on items.
 type Server struct {
-	port   int
-	store  *store.Store
-	server *http.Server
+	port         int
+	store        *store.Store
+	server       *http.Server
+	explorerHTML []byte
 }
 
 // New creates a new REST API server.
 func New(port int, s *store.Store) *Server {
 	srv := &Server{port: port, store: s}
+
+	// Pre-render the REST explorer page.
+	var buf bytes.Buffer
+	if err := ui.RenderREST(&buf, ui.RESTExplorerData{Port: port}); err == nil {
+		srv.explorerHTML = buf.Bytes()
+	}
+
 	mux := http.NewServeMux()
 
 	// Routes: /api/v1/items and /api/v1/items/{id}
 	mux.HandleFunc("/api/v1/items", srv.handleItems)
 	mux.HandleFunc("/api/v1/items/", srv.handleItemByID)
 	mux.HandleFunc("/health", srv.handleHealth)
+	mux.Handle("/static/", ui.StaticHandler())
+	mux.HandleFunc("/", srv.handleRoot)
 
 	srv.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
@@ -37,6 +49,15 @@ func New(port int, s *store.Store) *Server {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	return srv
+}
+
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/" && s.explorerHTML != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(s.explorerHTML)
+		return
+	}
+	http.NotFound(w, r)
 }
 
 // Port returns the configured port.

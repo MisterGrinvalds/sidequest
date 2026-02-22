@@ -36,7 +36,7 @@ var httpServeCmd = &cobra.Command{
 	Short: "Start the HTTP echo server",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, _ := cmd.Flags().GetInt("port")
-		srv := httpserver.New(port)
+		srv := httpserver.New(port, nil)
 
 		fmt.Printf("HTTP echo server listening on :%d\n", port)
 		fmt.Println("Endpoints: /echo, /headers, /ip, /delay/:s, /status/:code, /health, /ready")

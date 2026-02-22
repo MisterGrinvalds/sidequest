@@ -10,7 +10,7 @@ import (
 )
 
 func newTestServer() *httptest.Server {
-	srv := New(0)
+	srv := New(0, nil)
 	// Extract the handler from our server.
 	return httptest.NewServer(srv.server.Handler)
 }

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,17 +11,30 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/MisterGrinvalds/sidequest/internal/server/ui"
 )
 
 // Server is an HTTP echo server for testing connectivity.
 type Server struct {
-	port   int
-	server *http.Server
+	port        int
+	server      *http.Server
+	landingHTML []byte // pre-rendered landing page; nil = echo fallback
 }
 
 // New creates a new HTTP echo server on the given port.
-func New(port int) *Server {
+// If landing is non-nil, "/" serves the rendered landing page instead of echo.
+func New(port int, landing *ui.LandingData) *Server {
 	s := &Server{port: port}
+
+	// Pre-render the landing page if data was provided.
+	if landing != nil {
+		var buf bytes.Buffer
+		if err := ui.RenderLanding(&buf, *landing); err == nil {
+			s.landingHTML = buf.Bytes()
+		}
+	}
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/echo", s.handleEcho)
@@ -31,7 +45,8 @@ func New(port int) *Server {
 	mux.HandleFunc("/status/", s.handleStatus)
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/ready", s.handleReady)
-	mux.HandleFunc("/", s.handleEcho)
+	mux.Handle("/static/", ui.StaticHandler())
+	mux.HandleFunc("/", s.handleRoot)
 
 	s.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
@@ -60,6 +75,16 @@ func (s *Server) Shutdown(ctx context.Context) error {
 // Close immediately stops the server.
 func (s *Server) Close() error {
 	return s.server.Close()
+}
+
+// handleRoot serves the landing page if available, otherwise falls back to echo.
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/" && s.landingHTML != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(s.landingHTML)
+		return
+	}
+	s.handleEcho(w, r)
 }
 
 func (s *Server) handleEcho(w http.ResponseWriter, r *http.Request) {

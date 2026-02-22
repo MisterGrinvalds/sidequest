@@ -55,6 +55,15 @@ func New(port int, s *store.Store) (*Server, error) {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	// Redirect root to GraphiQL playground.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/playground", http.StatusFound)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
 	srv.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
 		Handler:           mux,

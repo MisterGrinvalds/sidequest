@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -15,18 +16,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MisterGrinvalds/sidequest/internal/server/ui"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 // Server is a minimal OIDC-compatible identity provider.
 type Server struct {
-	port       int
-	issuer     string
-	privateKey *rsa.PrivateKey
-	keyID      string
-	tokenTTL   time.Duration
-	clients    map[string]string // client_id -> client_secret
-	server     *http.Server
+	port         int
+	issuer       string
+	privateKey   *rsa.PrivateKey
+	keyID        string
+	tokenTTL     time.Duration
+	clients      map[string]string // client_id -> client_secret
+	server       *http.Server
+	explorerHTML []byte
 }
 
 // Config holds identity server configuration.
@@ -80,6 +83,15 @@ func New(cfg Config) (*Server, error) {
 		}
 	}
 
+	// Pre-render the OIDC explorer page.
+	var buf bytes.Buffer
+	if err := ui.RenderIdentity(&buf, ui.IdentityExplorerData{
+		Port:   cfg.Port,
+		Issuer: cfg.Issuer,
+	}); err == nil {
+		s.explorerHTML = buf.Bytes()
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", s.handleDiscovery)
 	mux.HandleFunc("/jwks", s.handleJWKS)
@@ -90,6 +102,8 @@ func New(cfg Config) (*Server, error) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
 	})
+	mux.Handle("/static/", ui.StaticHandler())
+	mux.HandleFunc("/", s.handleRoot)
 
 	s.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
@@ -98,6 +112,15 @@ func New(cfg Config) (*Server, error) {
 	}
 
 	return s, nil
+}
+
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/" && s.explorerHTML != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(s.explorerHTML)
+		return
+	}
+	http.NotFound(w, r)
 }
 
 // Port returns the configured port.
