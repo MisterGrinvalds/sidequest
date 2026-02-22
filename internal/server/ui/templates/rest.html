@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sidequest - REST Explorer</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <h1><span class="prompt">$</span> sidequest rest<span class="cursor"></span></h1>
+    <p class="tagline">REST API Explorer &mdash; port {{.Port}}</p>
+  </header>
+
+  <div class="section">
+    <h2>Request</h2>
+    <div class="explorer">
+      <div class="toolbar">
+        <select id="method">
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+          <option value="PUT">PUT</option>
+          <option value="DELETE">DELETE</option>
+        </select>
+        <input type="text" id="path" value="/api/v1/items" placeholder="/api/v1/items">
+        <button class="btn" onclick="sendRequest()">Send</button>
+      </div>
+      <textarea id="body" placeholder='{"name":"example","data":{"key":"value"},"labels":{"env":"dev"}}'></textarea>
+      <div class="status-line" id="status"></div>
+      <div class="response" id="response">Response will appear here...</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Endpoints</h2>
+    <div class="explorer" style="padding: 1rem">
+      <ul class="paths">
+        <li><span class="method">GET</span> <span class="path-name">/api/v1/items</span> <span class="desc">List items (query: limit, offset, sort, labels)</span></li>
+        <li><span class="method method-post">POST</span> <span class="path-name">/api/v1/items</span> <span class="desc">Create item</span></li>
+        <li><span class="method">GET</span> <span class="path-name">/api/v1/items/{id}</span> <span class="desc">Get item (supports If-None-Match)</span></li>
+        <li><span class="method method-put">PUT</span> <span class="path-name">/api/v1/items/{id}</span> <span class="desc">Upsert item (supports If-Match)</span></li>
+        <li><span class="method method-delete">DELETE</span> <span class="path-name">/api/v1/items/{id}</span> <span class="desc">Delete item</span></li>
+        <li><span class="method">GET</span> <span class="path-name">/health</span> <span class="desc">Health check</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Examples</h2>
+    <pre>
+<span class="comment"># List all items</span>
+<span class="cmd">curl</span> <span class="url">http://localhost:{{.Port}}/api/v1/items</span>
+
+<span class="comment"># Create an item</span>
+<span class="cmd">curl</span> <span class="flag">-X POST</span> <span class="url">http://localhost:{{.Port}}/api/v1/items</span> \
+  <span class="flag">-H</span> 'Content-Type: application/json' \
+  <span class="flag">-d</span> '{"name":"demo","data":{"hello":"world"},"labels":{"env":"dev"}}'
+
+<span class="comment"># List with label filter and sorting</span>
+<span class="cmd">curl</span> '<span class="url">http://localhost:{{.Port}}/api/v1/items?labels=env:dev&sort=name&limit=10</span>'
+
+<span class="comment"># Conditional GET (returns 304 if unchanged)</span>
+<span class="cmd">curl</span> <span class="flag">-H</span> 'If-None-Match: "abc123"' <span class="url">http://localhost:{{.Port}}/api/v1/items/ID</span>
+
+<span class="comment"># Conditional update (fails with 412 if ETag mismatch)</span>
+<span class="cmd">curl</span> <span class="flag">-X PUT</span> <span class="flag">-H</span> 'If-Match: "abc123"' \
+  <span class="url">http://localhost:{{.Port}}/api/v1/items/ID</span> \
+  <span class="flag">-d</span> '{"name":"updated"}'
+</pre>
+  </div>
+
+</div>
+
+<script>
+async function sendRequest() {
+  const method = document.getElementById('method').value;
+  const path = document.getElementById('path').value;
+  const body = document.getElementById('body').value;
+  const statusEl = document.getElementById('status');
+  const responseEl = document.getElementById('response');
+
+  statusEl.style.display = 'block';
+  statusEl.className = 'status-line status-info';
+  statusEl.textContent = 'Sending...';
+  responseEl.textContent = '';
+
+  try {
+    const opts = { method, headers: {} };
+    if (body && (method === 'POST' || method === 'PUT')) {
+      opts.body = body;
+      opts.headers['Content-Type'] = 'application/json';
+    }
+
+    const res = await fetch(path, opts);
+    const text = await res.text();
+
+    statusEl.className = 'status-line ' + (res.ok ? 'status-ok' : 'status-err');
+    statusEl.textContent = res.status + ' ' + res.statusText;
+
+    // Show response headers
+    let headers = '';
+    res.headers.forEach((v, k) => { headers += k + ': ' + v + '\n'; });
+
+    try {
+      const json = JSON.parse(text);
+      responseEl.textContent = headers + '\n' + JSON.stringify(json, null, 2);
+    } catch {
+      responseEl.textContent = headers + '\n' + text;
+    }
+  } catch (err) {
+    statusEl.className = 'status-line status-err';
+    statusEl.textContent = 'Error';
+    responseEl.textContent = err.message;
+  }
+}
+
+// Send on Ctrl+Enter in body
+document.getElementById('body').addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 'Enter') sendRequest();
+});
+</script>
+</body>
+</html>

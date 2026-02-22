@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sidequest</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <h1><span class="prompt">$</span> sidequest<span class="cursor"></span></h1>
+    <div class="meta">{{.Version}} ({{.Commit}}) built {{.Date}}</div>
+    <p class="tagline">Multi-tool Swiss Army knife for Kubernetes and container runtimes</p>
+  </header>
+
+  <div class="section">
+    <h2>Running Servers</h2>
+    <div class="servers">
+      {{range .Servers}}
+      <div class="server-card">
+        <div class="top">
+          <span>
+            <span class="name">{{.Name}}</span>
+            <span class="port">:{{.Port}}</span>
+          </span>
+          <span>
+            <span class="badge {{if eq .Protocol "grpc"}}badge-grpc{{else if eq .Protocol "dns"}}badge-dns{{else if eq .Protocol "oidc"}}badge-oidc{{else}}badge-http{{end}}">{{.Protocol}}</span>
+            {{if .Enabled}}<span class="badge badge-running">running</span>{{else}}<span class="badge badge-stopped">stopped</span>{{end}}
+          </span>
+        </div>
+        {{if .Paths}}
+        <ul class="paths">
+          {{range .Paths}}
+          <li>
+            <span class="method {{if eq .Method "POST"}}method-post{{else if eq .Method "PUT"}}method-put{{else if eq .Method "DELETE"}}method-delete{{end}}">{{.Method}}</span>
+            <span class="path-name">{{.Path}}</span>
+            <span class="desc">{{.Description}}</span>
+          </li>
+          {{end}}
+        </ul>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Quick Start</h2>
+    <pre>
+<span class="comment"># Echo request details</span>
+<span class="cmd">curl</span> <span class="url">http://localhost:8080/echo</span>
+
+<span class="comment"># Create an item via REST</span>
+<span class="cmd">curl</span> <span class="flag">-X POST</span> <span class="url">http://localhost:8081/api/v1/items</span> \
+  <span class="flag">-H</span> 'Content-Type: application/json' \
+  <span class="flag">-d</span> '{"name":"hello","data":{"msg":"world"}}'
+
+<span class="comment"># Query items via GraphQL</span>
+<span class="cmd">curl</span> <span class="url">http://localhost:8082/graphql</span> \
+  <span class="flag">-H</span> 'Content-Type: application/json' \
+  <span class="flag">-d</span> '{"query":"{ items { items { id name } } }"}'
+
+<span class="comment"># List gRPC services via reflection</span>
+<span class="cmd">grpcurl</span> <span class="flag">-plaintext</span> <span class="url">localhost:9090</span> list
+
+<span class="comment"># DNS lookup</span>
+<span class="cmd">dig</span> <span class="flag">@localhost</span> <span class="flag">-p 5353</span> <span class="url">sidequest.local</span>
+
+<span class="comment"># Get an OIDC token</span>
+<span class="cmd">curl</span> <span class="flag">-X POST</span> <span class="url">http://localhost:8443/token</span> \
+  <span class="flag">-u</span> sidequest-client:sidequest-secret \
+  <span class="flag">-d</span> 'grant_type=client_credentials'
+</pre>
+  </div>
+
+  <div class="section">
+    <h2>Environment Variables</h2>
+    <table class="env-table">
+      <thead>
+        <tr>
+          <th>Variable</th>
+          <th>Default</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="var-name">SIDEQUEST_HTTP_ENABLED</td><td class="var-default">true</td><td>Enable HTTP echo server</td></tr>
+        <tr><td class="var-name">SIDEQUEST_HTTP_PORT</td><td class="var-default">8080</td><td>HTTP echo server port</td></tr>
+        <tr><td class="var-name">SIDEQUEST_REST_ENABLED</td><td class="var-default">true</td><td>Enable REST API server</td></tr>
+        <tr><td class="var-name">SIDEQUEST_REST_PORT</td><td class="var-default">8081</td><td>REST API server port</td></tr>
+        <tr><td class="var-name">SIDEQUEST_GRPC_ENABLED</td><td class="var-default">true</td><td>Enable gRPC server</td></tr>
+        <tr><td class="var-name">SIDEQUEST_GRPC_PORT</td><td class="var-default">9090</td><td>gRPC server port</td></tr>
+        <tr><td class="var-name">SIDEQUEST_GRAPHQL_ENABLED</td><td class="var-default">true</td><td>Enable GraphQL server</td></tr>
+        <tr><td class="var-name">SIDEQUEST_GRAPHQL_PORT</td><td class="var-default">8082</td><td>GraphQL server port</td></tr>
+        <tr><td class="var-name">SIDEQUEST_DNS_ENABLED</td><td class="var-default">false</td><td>Enable DNS server</td></tr>
+        <tr><td class="var-name">SIDEQUEST_DNS_PORT</td><td class="var-default">5353</td><td>DNS server port</td></tr>
+        <tr><td class="var-name">SIDEQUEST_IDENTITY_ENABLED</td><td class="var-default">false</td><td>Enable OIDC identity provider</td></tr>
+        <tr><td class="var-name">SIDEQUEST_IDENTITY_PORT</td><td class="var-default">8443</td><td>OIDC provider port</td></tr>
+        <tr><td class="var-name">SIDEQUEST_IDENTITY_ISSUER</td><td class="var-default">http://localhost:8443</td><td>OIDC issuer URL</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>CLI Commands</h2>
+    <pre>
+<span class="cmd">sidequest serve</span>            <span class="comment"># Start all enabled servers</span>
+<span class="cmd">sidequest http serve</span>       <span class="comment"># Start HTTP echo server only</span>
+<span class="cmd">sidequest rest serve</span>       <span class="comment"># Start REST API server only</span>
+<span class="cmd">sidequest grpc serve</span>       <span class="comment"># Start gRPC server only</span>
+<span class="cmd">sidequest graphql serve</span>    <span class="comment"># Start GraphQL server only</span>
+<span class="cmd">sidequest dns serve</span>        <span class="comment"># Start DNS server only</span>
+<span class="cmd">sidequest identity serve</span>   <span class="comment"># Start OIDC provider only</span>
+<span class="cmd">sidequest deploy k8s</span>       <span class="comment"># Deploy to Kubernetes cluster</span>
+<span class="cmd">sidequest undeploy k8s</span>     <span class="comment"># Remove from Kubernetes</span>
+<span class="cmd">sidequest net ping</span>         <span class="comment"># Network diagnostics</span>
+<span class="cmd">sidequest container info</span>   <span class="comment"># Container runtime detection</span>
+<span class="cmd">sidequest storage df</span>       <span class="comment"># Disk usage</span>
+<span class="cmd">sidequest k8s pods</span>         <span class="comment"># kubectl wrapper</span>
+<span class="cmd">sidequest metrics</span>          <span class="comment"># Launch btop++</span>
+<span class="cmd">sidequest version</span>          <span class="comment"># Build info</span>
+</pre>
+  </div>
+
+</div>
+</body>
+</html>

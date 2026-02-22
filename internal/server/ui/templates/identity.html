@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sidequest - OIDC Explorer</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <h1><span class="prompt">$</span> sidequest identity<span class="cursor"></span></h1>
+    <p class="tagline">OIDC Identity Provider Explorer &mdash; port {{.Port}}</p>
+    <div class="meta">Issuer: {{.Issuer}}</div>
+  </header>
+
+  <div class="section">
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('token')">Token</button>
+      <button class="tab" onclick="showTab('discover')">Discovery</button>
+      <button class="tab" onclick="showTab('jwks')">JWKS</button>
+      <button class="tab" onclick="showTab('inspect')">Inspect</button>
+      <button class="tab" onclick="showTab('introspect')">Introspect</button>
+    </div>
+  </div>
+
+  <!-- Token tab -->
+  <div class="section tab-content" id="tab-token">
+    <h2>Request Token</h2>
+    <div class="explorer">
+      <div class="toolbar">
+        <label style="color:var(--text-muted);font-family:var(--mono);font-size:0.85rem">client_id:</label>
+        <input type="text" id="client-id" value="sidequest-client" style="max-width:14em">
+        <label style="color:var(--text-muted);font-family:var(--mono);font-size:0.85rem">secret:</label>
+        <input type="text" id="client-secret" value="sidequest-secret" style="max-width:14em">
+        <button class="btn" onclick="requestToken()">Get Token</button>
+      </div>
+      <div class="status-line" id="token-status"></div>
+      <div class="response" id="token-response">Click "Get Token" to request a JWT via client_credentials grant...</div>
+    </div>
+    <div id="token-display" style="display:none;margin-top:1rem">
+      <h2 style="font-family:var(--mono);font-size:0.9rem;color:var(--text-muted);margin-bottom:0.5rem">Access Token</h2>
+      <div class="token-box" id="access-token"></div>
+      <h2 style="font-family:var(--mono);font-size:0.9rem;color:var(--text-muted);margin:0.75rem 0 0.5rem">Decoded Claims</h2>
+      <div class="claims" id="token-claims"></div>
+    </div>
+  </div>
+
+  <!-- Discovery tab -->
+  <div class="section tab-content" id="tab-discover" style="display:none">
+    <h2>OIDC Discovery</h2>
+    <div class="explorer">
+      <div class="toolbar">
+        <span style="font-family:var(--mono);font-size:0.85rem;color:var(--text-muted)">GET /.well-known/openid-configuration</span>
+        <button class="btn" onclick="fetchDiscovery()">Fetch</button>
+      </div>
+      <div class="response" id="discovery-response">Click "Fetch" to load the OIDC discovery document...</div>
+    </div>
+  </div>
+
+  <!-- JWKS tab -->
+  <div class="section tab-content" id="tab-jwks" style="display:none">
+    <h2>JSON Web Key Set</h2>
+    <div class="explorer">
+      <div class="toolbar">
+        <span style="font-family:var(--mono);font-size:0.85rem;color:var(--text-muted)">GET /jwks</span>
+        <button class="btn" onclick="fetchJWKS()">Fetch</button>
+      </div>
+      <div class="response" id="jwks-response">Click "Fetch" to load the JWKS...</div>
+    </div>
+  </div>
+
+  <!-- Inspect tab -->
+  <div class="section tab-content" id="tab-inspect" style="display:none">
+    <h2>Inspect JWT</h2>
+    <div class="explorer">
+      <textarea id="inspect-input" placeholder="Paste a JWT here (or request a token first and it will auto-fill)..."></textarea>
+      <div class="toolbar">
+        <button class="btn" onclick="inspectJWT()">Decode</button>
+      </div>
+      <div class="response" id="inspect-response">Paste a JWT above and click "Decode" to view its header and claims...</div>
+    </div>
+  </div>
+
+  <!-- Introspect tab -->
+  <div class="section tab-content" id="tab-introspect" style="display:none">
+    <h2>Token Introspection</h2>
+    <div class="explorer">
+      <textarea id="introspect-input" placeholder="Paste a token here to introspect via the server..."></textarea>
+      <div class="toolbar">
+        <button class="btn" onclick="introspectToken()">Introspect</button>
+      </div>
+      <div class="status-line" id="introspect-status"></div>
+      <div class="response" id="introspect-response">Paste a token above and click "Introspect" to validate it server-side...</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Examples</h2>
+    <pre>
+<span class="comment"># OIDC Discovery</span>
+<span class="cmd">curl</span> <span class="url">http://localhost:{{.Port}}/.well-known/openid-configuration</span>
+
+<span class="comment"># Get a token (client_credentials)</span>
+<span class="cmd">curl</span> <span class="flag">-X POST</span> <span class="url">http://localhost:{{.Port}}/token</span> \
+  <span class="flag">-u</span> sidequest-client:sidequest-secret \
+  <span class="flag">-d</span> 'grant_type=client_credentials'
+
+<span class="comment"># Introspect a token</span>
+<span class="cmd">curl</span> <span class="flag">-X POST</span> <span class="url">http://localhost:{{.Port}}/introspect</span> \
+  <span class="flag">-d</span> 'token=YOUR_TOKEN_HERE'
+
+<span class="comment"># Userinfo</span>
+<span class="cmd">curl</span> <span class="flag">-H</span> 'Authorization: Bearer YOUR_TOKEN' \
+  <span class="url">http://localhost:{{.Port}}/userinfo</span>
+</pre>
+  </div>
+
+</div>
+
+<script>
+let lastToken = '';
+
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).style.display = 'block';
+  event.target.classList.add('active');
+}
+
+async function requestToken() {
+  const clientId = document.getElementById('client-id').value;
+  const clientSecret = document.getElementById('client-secret').value;
+  const statusEl = document.getElementById('token-status');
+  const responseEl = document.getElementById('token-response');
+
+  statusEl.style.display = 'block';
+  statusEl.className = 'status-line status-info';
+  statusEl.textContent = 'Requesting token...';
+
+  try {
+    const res = await fetch('/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + btoa(clientId + ':' + clientSecret)
+      },
+      body: 'grant_type=client_credentials'
+    });
+
+    const data = await res.json();
+    statusEl.className = 'status-line ' + (res.ok ? 'status-ok' : 'status-err');
+    statusEl.textContent = res.status + ' ' + res.statusText;
+    responseEl.textContent = JSON.stringify(data, null, 2);
+
+    if (data.access_token) {
+      lastToken = data.access_token;
+      document.getElementById('token-display').style.display = 'block';
+      document.getElementById('access-token').textContent = data.access_token;
+      document.getElementById('introspect-input').value = data.access_token;
+      document.getElementById('inspect-input').value = data.access_token;
+      decodeAndShowClaims(data.access_token);
+    }
+  } catch (err) {
+    statusEl.className = 'status-line status-err';
+    statusEl.textContent = 'Error';
+    responseEl.textContent = err.message;
+  }
+}
+
+function decodeAndShowClaims(token) {
+  try {
+    const parts = token.split('.');
+    const claims = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    const claimsEl = document.getElementById('token-claims');
+    claimsEl.innerHTML = '';
+    for (const [k, v] of Object.entries(claims)) {
+      let display = v;
+      if (k === 'exp' || k === 'iat' || k === 'nbf') {
+        display = v + ' (' + new Date(v * 1000).toISOString() + ')';
+      }
+      claimsEl.innerHTML += '<span class="key">' + k + '</span><span class="val">' + display + '</span>';
+    }
+  } catch {}
+}
+
+async function fetchDiscovery() {
+  const el = document.getElementById('discovery-response');
+  try {
+    const res = await fetch('/.well-known/openid-configuration');
+    const data = await res.json();
+    el.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    el.textContent = 'Error: ' + err.message;
+  }
+}
+
+async function fetchJWKS() {
+  const el = document.getElementById('jwks-response');
+  try {
+    const res = await fetch('/jwks');
+    const data = await res.json();
+    el.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    el.textContent = 'Error: ' + err.message;
+  }
+}
+
+function inspectJWT() {
+  const token = document.getElementById('inspect-input').value.trim();
+  const el = document.getElementById('inspect-response');
+  if (!token) { el.textContent = 'Paste a JWT first.'; return; }
+
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) { el.textContent = 'Invalid JWT format (expected 3 dot-separated parts).'; return; }
+
+    const header = JSON.parse(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/')));
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+
+    el.textContent = '=== HEADER ===\n' + JSON.stringify(header, null, 2) +
+                     '\n\n=== PAYLOAD ===\n' + JSON.stringify(payload, null, 2) +
+                     '\n\n=== SIGNATURE ===\n' + parts[2];
+  } catch (err) {
+    el.textContent = 'Failed to decode: ' + err.message;
+  }
+}
+
+async function introspectToken() {
+  const token = document.getElementById('introspect-input').value.trim();
+  const statusEl = document.getElementById('introspect-status');
+  const el = document.getElementById('introspect-response');
+
+  if (!token) { el.textContent = 'Paste a token first.'; return; }
+
+  statusEl.style.display = 'block';
+  statusEl.className = 'status-line status-info';
+  statusEl.textContent = 'Introspecting...';
+
+  try {
+    const res = await fetch('/introspect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'token=' + encodeURIComponent(token)
+    });
+    const data = await res.json();
+    statusEl.className = 'status-line ' + (res.ok ? 'status-ok' : 'status-err');
+    statusEl.textContent = res.status + ' ' + res.statusText;
+    el.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    statusEl.className = 'status-line status-err';
+    statusEl.textContent = 'Error';
+    el.textContent = err.message;
+  }
+}
+</script>
+</body>
+</html>
