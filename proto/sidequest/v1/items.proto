@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package sidequest.v1;
+
+option go_package = "github.com/MisterGrinvalds/sidequest/proto/sidequest/v1;sidequestv1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+
+// ItemService provides CRUD operations on items.
+service ItemService {
+  rpc GetItem(GetItemRequest) returns (Item);
+  rpc ListItems(ListItemsRequest) returns (ListItemsResponse);
+  rpc CreateItem(CreateItemRequest) returns (Item);
+  rpc UpdateItem(UpdateItemRequest) returns (Item);
+  rpc DeleteItem(DeleteItemRequest) returns (google.protobuf.Empty);
+  rpc WatchItems(WatchItemsRequest) returns (stream ItemEvent);
+}
+
+message Item {
+  string id = 1;
+  string name = 2;
+  map<string, string> labels = 3;
+  google.protobuf.Struct data = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  int32 version = 7;
+}
+
+message GetItemRequest {
+  string id = 1;
+}
+
+message ListItemsRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  string sort = 3;
+  map<string, string> labels = 4;
+}
+
+message ListItemsResponse {
+  repeated Item items = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 limit = 4;
+  int32 pages = 5;
+}
+
+message CreateItemRequest {
+  string name = 1;
+  map<string, string> labels = 2;
+  google.protobuf.Struct data = 3;
+}
+
+message UpdateItemRequest {
+  string id = 1;
+  string name = 2;
+  map<string, string> labels = 3;
+  google.protobuf.Struct data = 4;
+}
+
+message DeleteItemRequest {
+  string id = 1;
+}
+
+message WatchItemsRequest {
+  map<string, string> labels = 1;
+}
+
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  EVENT_TYPE_CREATED = 1;
+  EVENT_TYPE_UPDATED = 2;
+  EVENT_TYPE_DELETED = 3;
+}
+
+message ItemEvent {
+  EventType type = 1;
+  Item item = 2;
+}

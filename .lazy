@@ -1,0 +1,16 @@
+version: 1
+artifacts:
+  - type: image
+    name: sidequest
+    dockerfile: Dockerfile
+    context: "."
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    targets:
+      - registry: "{{ .Registry }}/sidequest"
+        tags:
+          - "{{ .Version }}"
+          - "{{ .VersionMajorMinor }}"
+          - "{{ .GitSHA }}"
+          - latest
