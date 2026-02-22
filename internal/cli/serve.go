@@ -19,6 +19,7 @@ import (
 	httpserver "github.com/MisterGrinvalds/sidequest/internal/server/http"
 	idserver "github.com/MisterGrinvalds/sidequest/internal/server/identity"
 	restserver "github.com/MisterGrinvalds/sidequest/internal/server/rest"
+	"github.com/MisterGrinvalds/sidequest/internal/server/ui"
 	"github.com/MisterGrinvalds/sidequest/internal/store"
 )
 
@@ -52,9 +53,12 @@ Enable/disable servers via environment variables:
 		var wg sync.WaitGroup
 		errCh := make(chan error, 10)
 
+		// Build landing page data describing all servers.
+		landing := buildLandingData(c)
+
 		if c.HTTPEnabled {
-			srv := httpserver.New(c.HTTPPort)
-			fmt.Printf("  HTTP echo server   :%d\n", c.HTTPPort)
+			srv := httpserver.New(c.HTTPPort, &landing)
+			fmt.Printf("  HTTP echo server   :%d  (docs at /)\n", c.HTTPPort)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -72,7 +76,7 @@ Enable/disable servers via environment variables:
 
 		if c.RESTEnabled {
 			srv := restserver.New(c.RESTPort, s)
-			fmt.Printf("  REST API server    :%d\n", c.RESTPort)
+			fmt.Printf("  REST API server    :%d  (explorer at /)\n", c.RESTPort)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -109,7 +113,7 @@ Enable/disable servers via environment variables:
 			if err != nil {
 				return fmt.Errorf("creating GraphQL server: %w", err)
 			}
-			fmt.Printf("  GraphQL server     :%d\n", c.GraphQLPort)
+			fmt.Printf("  GraphQL server     :%d  (playground at /)\n", c.GraphQLPort)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -150,7 +154,7 @@ Enable/disable servers via environment variables:
 			if err != nil {
 				return fmt.Errorf("creating identity server: %w", err)
 			}
-			fmt.Printf("  OIDC provider      :%d\n", c.IdentityPort)
+			fmt.Printf("  OIDC provider      :%d  (explorer at /)\n", c.IdentityPort)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -183,4 +187,73 @@ Enable/disable servers via environment variables:
 
 		return nil
 	},
+}
+
+// buildLandingData constructs the template data for the landing page from config.
+func buildLandingData(c *config.Config) ui.LandingData {
+	servers := []ui.ServerInfo{
+		{
+			Name: "HTTP Echo", Protocol: "http", Port: c.HTTPPort, Enabled: c.HTTPEnabled,
+			Paths: []ui.PathInfo{
+				{Method: "GET", Path: "/echo", Description: "Echo request details"},
+				{Method: "GET", Path: "/headers", Description: "Request headers"},
+				{Method: "GET", Path: "/ip", Description: "Client IP address"},
+				{Method: "GET", Path: "/delay/:s", Description: "Delayed response"},
+				{Method: "GET", Path: "/status/:code", Description: "Specific status code"},
+				{Method: "GET", Path: "/health", Description: "Health check"},
+				{Method: "GET", Path: "/ready", Description: "Readiness check"},
+			},
+		},
+		{
+			Name: "REST API", Protocol: "http", Port: c.RESTPort, Enabled: c.RESTEnabled,
+			Paths: []ui.PathInfo{
+				{Method: "GET", Path: "/api/v1/items", Description: "List items"},
+				{Method: "POST", Path: "/api/v1/items", Description: "Create item"},
+				{Method: "GET", Path: "/api/v1/items/:id", Description: "Get item"},
+				{Method: "PUT", Path: "/api/v1/items/:id", Description: "Upsert item"},
+				{Method: "DELETE", Path: "/api/v1/items/:id", Description: "Delete item"},
+			},
+		},
+		{
+			Name: "gRPC", Protocol: "grpc", Port: c.GRPCPort, Enabled: c.GRPCEnabled,
+			Paths: []ui.PathInfo{
+				{Method: "RPC", Path: "GetItem", Description: "Get item by ID"},
+				{Method: "RPC", Path: "ListItems", Description: "List items"},
+				{Method: "RPC", Path: "CreateItem", Description: "Create item"},
+				{Method: "RPC", Path: "UpdateItem", Description: "Update item"},
+				{Method: "RPC", Path: "DeleteItem", Description: "Delete item"},
+				{Method: "RPC", Path: "WatchItems", Description: "Stream item events"},
+			},
+		},
+		{
+			Name: "GraphQL", Protocol: "http", Port: c.GraphQLPort, Enabled: c.GraphQLEnabled,
+			Paths: []ui.PathInfo{
+				{Method: "POST", Path: "/graphql", Description: "GraphQL endpoint"},
+				{Method: "GET", Path: "/playground", Description: "GraphiQL playground"},
+			},
+		},
+		{
+			Name: "DNS", Protocol: "dns", Port: c.DNSPort, Enabled: c.DNSEnabled,
+			Paths: []ui.PathInfo{
+				{Method: "A", Path: "sidequest.local", Description: "Default zone"},
+			},
+		},
+		{
+			Name: "Identity (OIDC)", Protocol: "oidc", Port: c.IdentityPort, Enabled: c.IdentityEnabled,
+			Paths: []ui.PathInfo{
+				{Method: "GET", Path: "/.well-known/openid-configuration", Description: "OIDC discovery"},
+				{Method: "GET", Path: "/jwks", Description: "JSON Web Key Set"},
+				{Method: "POST", Path: "/token", Description: "Token endpoint"},
+				{Method: "POST", Path: "/introspect", Description: "Token introspection"},
+				{Method: "GET", Path: "/userinfo", Description: "User info"},
+			},
+		},
+	}
+
+	return ui.LandingData{
+		Version: buildVersion,
+		Commit:  buildCommit,
+		Date:    buildDate,
+		Servers: servers,
+	}
 }
